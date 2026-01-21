@@ -29,8 +29,8 @@ huggingface-hub>=0.36.0,<1.0
 # Clustering
 hdbscan==0.8.33
 
-# Extra
-anthropic==0.25.0
+# LLM & AI
+anthropic>=0.28.0              # Claude API with tool_use support
 
 # Utilities
 python-dotenv==1.0.0

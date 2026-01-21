@@ -1,33 +1,31 @@
 #!/usr/bin/env python
 """
-Demo script for the ReAct error triage agent using Ollama.
+Demo script for the ReAct error triage agent using Claude API.
 
-Shows how to use the TriageAgent with a local Ollama LLM.
+Shows how to use the TriageAgent with Claude.
 
 Prerequisites:
-    1. Install Ollama: https://ollama.ai/
-    2. Pull a model: ollama pull gemma3:270m
-    3. Start Ollama server: ollama serve
+    1. Set ANTHROPIC_API_KEY environment variable with your Claude API key
+    2. Ensure embeddings and clustering data is available in data/
 
 Usage:
     # Interactive mode
-    python scripts/demo_agent.py
+    ANTHROPIC_API_KEY=sk-ant-... python scripts/demo_agent.py
 
     # Programmatic usage
-    python scripts/demo_agent.py --example
+    ANTHROPIC_API_KEY=sk-ant-... python scripts/demo_agent.py --example
 
 Or in code:
     from src.sentrylens.agent import TriageAgent
+    import os
 
-    agent = TriageAgent(
-        ollama_base_url="http://localhost:11434",
-        model="gemma3:270m"
-    )
+    os.environ["ANTHROPIC_API_KEY"] = "sk-ant-..."
+
+    agent = TriageAgent()
     response = agent.run("Help me fix NullPointerException")
     print(response)
 """
 import sys
-import os
 from pathlib import Path
 
 # Add project root to path
@@ -45,21 +43,18 @@ def main():
     print("=" * 60)
 
     print("\n✓ Prerequisites Check:")
-    print("  • Ollama server running at http://localhost:11434")
-    print("  • Model available (e.g., gemma3:270m)")
+    print("  • ANTHROPIC_API_KEY environment variable set")
+    print("  • Error embeddings and clustering data available")
 
     try:
         # Initialize agent
         print("\n✓ Initializing agent...")
-        agent = TriageAgent(
-            ollama_base_url="http://localhost:11434",
-            model="gemma3:270m",
-        )
+        agent = TriageAgent()
 
         print(f"✓ Agent initialized successfully")
         print(f"✓ Knowledge base: {len(agent.errors_dict)} errors")
         print(f"✓ Clustering info: {len(set(c.cluster_id for c in agent.clusters_dict.values() if c.cluster_id != -1))} clusters")
-        print(f"✓ Model: {agent.model} (Ollama)")
+        print(f"✓ Model: {agent.model} (Claude API)")
 
         # Run interactive chat
         print("\n" + "-" * 60)
@@ -74,15 +69,14 @@ def main():
 
         agent.chat()
 
-    except ConnectionError as e:
-        logger.error(f"Ollama connection failed: {e}")
+    except ValueError as e:
+        logger.error(f"Configuration error: {e}")
         print(f"\n✗ Error: {e}")
         print("\nSetup Instructions:")
-        print("  1. Install Ollama from: https://ollama.ai/")
-        print("  2. Start the server: ollama serve")
-        print("  3. In another terminal, pull a model:")
-        print("     ollama pull gemma3:270m")
-        print("  4. Run this script again")
+        print("  1. Get your Claude API key from: https://console.anthropic.com/")
+        print("  2. Set the environment variable:")
+        print("     export ANTHROPIC_API_KEY=sk-ant-...")
+        print("  3. Run this script again")
         sys.exit(1)
 
     except KeyboardInterrupt:
@@ -102,17 +96,13 @@ def example_programmatic_usage():
     This function shows how to use the agent without interactive mode.
     """
     print("\n" + "=" * 60)
-    print("Programmatic Usage Example (Ollama)")
+    print("Programmatic Usage Example (Claude API)")
     print("=" * 60)
 
     try:
-        # Initialize agent with Ollama
-        print("\nInitializing agent with Ollama...")
-        agent = TriageAgent(
-            ollama_base_url="http://localhost:11434",
-            model="gemma3:270m",
-            max_turns=5,
-        )
+        # Initialize agent with Claude
+        print("\nInitializing agent with Claude API...")
+        agent = TriageAgent(max_turns=5)
         print("✓ Agent initialized")
 
         # Example 1: Ask about a specific error
@@ -143,9 +133,9 @@ at javax.servlet.http.HttpServlet.service(HttpServlet.java:750)"""
         )
         print(response)
 
-    except ConnectionError as e:
-        print(f"\n✗ Ollama connection failed: {e}")
-        print("Make sure Ollama is running: ollama serve")
+    except ValueError as e:
+        print(f"\n✗ Configuration error: {e}")
+        print("Make sure ANTHROPIC_API_KEY is set")
 
 
 if __name__ == "__main__":

@@ -1,94 +1,77 @@
-/Users/vamsi.uppala/Documents/personal/sentrylens
-├── configs
-│   └── settings.py
-├── data
-│   ├── aeri
-│   ├── embeddings
-│   ├── indexes
-│   ├── processed
-│   └── swebench
-├── download_aeri.sh
-├── download_aeri_json.sh
-├── download_swebench.py
-├── explore_data.ipynb
-├── explore_stacktrace.py
-├── htmlcov
-│   ├── class_index.html
-│   ├── coverage_html_cb_6fb7b396.js
-│   ├── favicon_32_cb_58284776.png
-│   ├── function_index.html
-│   ├── index.html
-│   ├── keybd_closed_cb_ce680311.png
-│   ├── status.json
-│   ├── style_cb_6b508a39.css
-│   ├── z_1739eef1a98282c3___init___py.html
-│   ├── z_1739eef1a98282c3_logger_py.html
-│   ├── z_3c429d99a7c1d8db___init___py.html
-│   ├── z_43d7b756791ea5db___init___py.html
-│   ├── z_43d7b756791ea5db_embedder_py.html
-│   ├── z_43d7b756791ea5db_vector_store_py.html
-│   ├── z_47c7b0b34f367e36___init___py.html
-│   ├── z_54838fd67bdce94a___init___py.html
-│   ├── z_54838fd67bdce94a_exceptions_py.html
-│   ├── z_54838fd67bdce94a_models_py.html
-│   ├── z_c142eea50d237058___init___py.html
-│   └── z_c142eea50d237058_loader_py.html
-├── logs
-│   ├── sentrylens_2026-01-19_17-13-41_589987.log
-│   ├── sentrylens_2026-01-19_17-15-03_681655.log
-│   ├── sentrylens_2026-01-19_17-57-58_867059.log
-│   ├── sentrylens_2026-01-19_18-00-39_403197.log
-│   ├── sentrylens_2026-01-19_18-01-53_382564.log
-│   ├── sentrylens_2026-01-20_10-49-30_416967.log
-│   ├── sentrylens_2026-01-20_11-55-23_569731.log
-│   ├── sentrylens_2026-01-20_12-02-02_067305.log
-│   ├── sentrylens_2026-01-20_12-07-45_286322.log
-│   ├── sentrylens_2026-01-20_12-08-16_061597.log
-│   ├── sentrylens_2026-01-20_12-49-20_947498.log
-│   ├── sentrylens_2026-01-20_12-50-48_303469.log
-│   ├── sentrylens_2026-01-20_12-51-10_206533.log
-│   ├── sentrylens_2026-01-20_12-52-04_873514.log
-│   ├── sentrylens_2026-01-20_12-52-46_399220.log
-│   ├── sentrylens_2026-01-20_12-53-30_943618.log
-│   ├── sentrylens_2026-01-20_12-55-25_672027.log
-│   ├── sentrylens_2026-01-20_12-55-40_250643.log
-│   ├── sentrylens_2026-01-20_12-57-38_027822.log
-│   ├── sentrylens_2026-01-20_13-00-19_264719.log
-│   ├── sentrylens_2026-01-20_13-00-57_694930.log
-│   ├── sentrylens_2026-01-20_13-02-28_395708.log
-│   ├── sentrylens_2026-01-20_13-03-28_511643.log
-│   ├── sentrylens_2026-01-20_13-06-23_665313.log
-│   ├── sentrylens_2026-01-20_13-29-05_407189.log
-│   ├── sentrylens_2026-01-20_13-30-58_485246.log
-│   ├── sentrylens_2026-01-20_13-42-27_622440.log
-│   ├── sentrylens_2026-01-20_13-48-27_106745.log
-│   ├── sentrylens_2026-01-20_13-49-16_394868.log
-│   ├── sentrylens_2026-01-20_13-52-19_585404.log
-│   ├── sentrylens_2026-01-20_13-53-14_083907.log
-│   └── sentrylens_2026-01-20_13-54-18_753182.log
-├── parse_stacktrace.py
-├── requirements-dev.txt
-├── requirements.txt
-├── scripts
-│   ├── generate_embeddings.py
-│   └── ingest_data.py
-├── sentrylens
-│   ├── __init__.py
-│   ├── models
-│   └── training
-├── src
-│   └── sentrylens
-├── structure.txt
-├── tests
-│   ├── integration
-│   └── unit
-└── venv
-    ├── bin
-    ├── dist_metrics.pxd
-    ├── etc
-    ├── include
-    ├── lib
-    ├── pyvenv.cfg
-    └── share
-
-25 directories, 67 files
+sentrylens/
+├── CLAUDE.md                       # Project context for AI assistants
+├── pytest.ini                      # Pytest configuration
+├── requirements.txt                # Production dependencies
+├── requirements-dev.txt            # Development dependencies
+│
+├── configs/
+│   └── settings.py                 # Configuration management
+│
+├── data/                           # Data directory (gitignored)
+│   ├── aeri/                       # Raw AERI JSON files (~10k problems)
+│   │   ├── incidents_extract.csv
+│   │   └── output_problems/        # Individual problem JSON files
+│   ├── embeddings/                 # Generated embeddings (.npy)
+│   ├── indexes/                    # FAISS indexes
+│   ├── processed/                  # Processed data + cluster assignments
+│   └── swebench/                   # SWE-bench data (optional)
+│
+├── exploration/                    # Learning/exploration files
+│   ├── data_preparation.py         # Contrastive learning data prep
+│   ├── download_aeri.sh            # AERI dataset download script
+│   ├── download_aeri_json.sh       # AERI JSON download script
+│   ├── download_swebench.py        # SWE-bench download script
+│   ├── explore_clustering.ipynb    # Clustering exploration notebook
+│   ├── explore_data.ipynb          # Data exploration notebook
+│   ├── explore_stacktrace.py       # Stack trace exploration
+│   └── parse_stacktrace.py         # Stack trace parser
+│
+├── logs/                           # Application logs (gitignored)
+│
+├── scripts/                        # Executable scripts
+│   ├── analyze_clusters.py         # Analyze cluster statistics
+│   ├── cluster_errors.py           # Run HDBSCAN clustering
+│   ├── demo_agent.py               # Demo the ReAct agent
+│   ├── generate_embeddings.py      # Generate and save embeddings
+│   └── ingest_data.py              # Load and process AERI data
+│
+├── src/sentrylens/                 # Main source code
+│   ├── agent/                      # ReAct agent module
+│   │   ├── __init__.py
+│   │   ├── prompts.py              # System prompts for Claude
+│   │   ├── tools.py                # Agent tools (search, analyze, suggest)
+│   │   └── triage_agent.py         # ReAct agent with Claude API
+│   │
+│   ├── clustering/                 # Clustering module
+│   │   ├── __init__.py
+│   │   └── clusterer.py            # HDBSCAN clustering
+│   │
+│   ├── core/                       # Core models and exceptions
+│   │   ├── __init__.py
+│   │   ├── exceptions.py           # Custom exceptions
+│   │   └── models.py               # Pydantic models (ErrorReport, etc.)
+│   │
+│   ├── data/                       # Data loading module
+│   │   ├── __init__.py
+│   │   └── loader.py               # AERI data loading
+│   │
+│   ├── embeddings/                 # Embeddings module
+│   │   ├── __init__.py
+│   │   ├── embedder.py             # Sentence transformer wrapper
+│   │   └── vector_store.py         # FAISS vector store
+│   │
+│   └── utils/                      # Utilities
+│       ├── __init__.py
+│       └── logger.py               # Logging configuration
+│
+└── tests/                          # Test suite
+    ├── integration/
+    │   └── test_embedding_pipeline.py
+    │
+    └── unit/
+        ├── test_agent.py
+        ├── test_clustering.py
+        ├── test_embedder.py
+        ├── test_models.py
+        ├── test_tools.py
+        └── test_vector_store.py

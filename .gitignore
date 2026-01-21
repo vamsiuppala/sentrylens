@@ -75,10 +75,7 @@ logs/
 
 # Jupyter
 .ipynb_checkpoints/
-*.ipynb
 
-# Exploration and temporary
-explore_*.py
-parse_*.py
-download_*.sh
-download_*.py
+# Track exploration folder (learning/exploration files)
+!exploration/
+!exploration/**

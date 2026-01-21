@@ -1,23 +1,21 @@
 """
 ReAct Agent for error triage.
 
-Implements the ReAct (Reasoning + Acting) pattern using Ollama local LLM.
-Orchestrates the reasoning process with tool-augmented responses.
+Implements the ReAct (Reasoning + Acting) pattern using Claude API.
+Leverages Claude's native tool_use capability for clean reasoning + action loops.
 """
 import json
-import re
+import os
 from pathlib import Path
 from typing import Optional, List, Dict, Any
-import requests
+from anthropic import Anthropic
 
 from src.sentrylens.data.loader import AERIDataLoader
 from src.sentrylens.embeddings.vector_store import FAISSVectorStore
 from src.sentrylens.embeddings.embedder import ErrorEmbedder
 from src.sentrylens.core.models import AERIErrorRecord, ClusterAssignment
 from src.sentrylens.agent.tools import TriageTools
-from src.sentrylens.agent.prompts import (
-    OLLAMA_AGENT_SYSTEM_PROMPT,
-)
+from src.sentrylens.agent.prompts import TRIAGE_AGENT_SYSTEM_PROMPT
 from src.sentrylens.utils.logger import logger
 
 
@@ -26,22 +24,19 @@ class TriageAgent:
     ReAct agent for error triage and fix suggestions.
 
     Architecture:
-    - Uses Ollama local LLM for reasoning
-    - Implements prompt-based tool calling (no native tool_use support)
-    - Parses tool calls from text using regex
+    - Uses Claude API for reasoning via Anthropic SDK
+    - Leverages native tool_use capability for clean tool calling
     - Integrates with FAISS vector store for similarity search
     - Leverages embedding and clustering from Steps 1-3
-    - Implements ReAct loop for multi-turn reasoning
+    - Implements ReAct loop for multi-turn reasoning with claude-3-5-sonnet
     """
 
     def __init__(
         self,
         data_dir: Optional[Path] = None,
         vector_store_path: Optional[Path] = None,
-        ollama_base_url: str = "http://localhost:11434",
-        model: str = "llama3.1:8b",
+        model: str = "claude-3-5-sonnet-20241022",
         max_turns: int = 10,
-        timeout: int = 120,
     ):
         """
         Initialize the triage agent.
@@ -49,26 +44,28 @@ class TriageAgent:
         Args:
             data_dir: Base data directory (default: project data/)
             vector_store_path: Path to FAISS vector store
-            ollama_base_url: URL where Ollama server is running
-            model: Ollama model to use (e.g., "llama3.1:8b", "codellama:13b")
+            model: Claude model to use (default: claude-3-5-sonnet-20241022)
             max_turns: Maximum number of ReAct turns
-            timeout: Request timeout in seconds
         """
         self.data_dir = data_dir or Path("data")
-        self.ollama_base_url = ollama_base_url
         self.model = model
         self.max_turns = max_turns
-        self.timeout = timeout
+
+        # Initialize Claude client (uses ANTHROPIC_API_KEY environment variable)
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise ValueError(
+                "ANTHROPIC_API_KEY environment variable not set. "
+                "Please set it to use Claude API."
+            )
+
+        self.client = Anthropic(api_key=api_key)
 
         logger.info(
             "Initializing TriageAgent",
-            ollama_url=ollama_base_url,
             model=model,
             max_turns=max_turns,
         )
-
-        # Check Ollama connection
-        self._check_ollama_connection()
 
         # Step 1: Load vector store (Step 2 artifact)
         if vector_store_path is None:
@@ -175,40 +172,16 @@ class TriageAgent:
 
         return errors_dict, clusters_dict
 
-    def _check_ollama_connection(self) -> None:
-        """
-        Check if Ollama server is reachable.
-
-        Raises:
-            ConnectionError: If Ollama server is not responding
-        """
-        try:
-            response = requests.get(
-                f"{self.ollama_base_url}/api/tags",
-                timeout=5,
-            )
-            if response.status_code == 200:
-                logger.info("Successfully connected to Ollama server")
-            else:
-                raise ConnectionError(f"Ollama server returned {response.status_code}")
-        except requests.exceptions.ConnectionError:
-            raise ConnectionError(
-                f"Cannot connect to Ollama at {self.ollama_base_url}. "
-                f"Make sure Ollama is running: ollama serve"
-            )
-        except Exception as e:
-            raise ConnectionError(f"Error connecting to Ollama: {e}")
 
     def run(self, user_query: str) -> str:
         """
         Run the ReAct agent on a user query.
 
-        Implements the ReAct loop:
-        1. Build prompt with conversation history
-        2. Call Ollama local LLM
-        3. Parse response for tool calls using regex
-        4. If tool call: execute tool and add result to history
-        5. Repeat until model provides final answer or max turns reached
+        Implements the ReAct loop using Claude's native tool_use:
+        1. Add user message to conversation
+        2. Call Claude with tools
+        3. If tool call: execute tool and add result to conversation
+        4. Repeat until model provides final answer or max turns reached
 
         Args:
             user_query: User's question or request
@@ -218,154 +191,87 @@ class TriageAgent:
         """
         logger.info("Running agent", query_length=len(user_query))
 
-        # Initialize conversation history
-        messages: List[Dict[str, str]] = []
+        # Initialize conversation messages
+        messages: List[Dict[str, Any]] = [
+            {"role": "user", "content": user_query}
+        ]
 
         for turn in range(self.max_turns):
             logger.debug(f"ReAct turn {turn + 1}/{self.max_turns}")
 
-            # Build full prompt with conversation history
-            full_prompt = self._build_prompt(messages, user_query)
-
-            # Call Ollama
+            # Call Claude with tools
             try:
-                response = requests.post(
-                    f"{self.ollama_base_url}/api/generate",
-                    json={
-                        "model": self.model,
-                        "prompt": full_prompt,
-                        "stream": False,
-                    },
-                    timeout=self.timeout,
+                response = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=4096,
+                    system=TRIAGE_AGENT_SYSTEM_PROMPT,
+                    tools=self.tools.get_tool_schemas(),
+                    messages=messages,
                 )
-                response.raise_for_status()
 
-                response_text = response.json()["response"]
-
-            except requests.exceptions.Timeout:
-                logger.error("Ollama request timed out")
-                return (
-                    "Request timed out. The model took too long to respond. "
-                    "Try a simpler query or increase the timeout."
-                )
-            except requests.exceptions.ConnectionError:
-                logger.error("Failed to connect to Ollama")
-                return (
-                    "Cannot connect to Ollama server. "
-                    "Make sure it's running: ollama serve"
-                )
-            except Exception as e:
-                logger.error(f"Ollama request failed: {e}")
-                return f"Error communicating with Ollama: {e}"
-
-            logger.debug("Ollama response", response_length=len(response_text))
-
-            # Parse response for tool calls
-            tool_call = self._parse_tool_call(response_text)
-
-            if tool_call:
-                # Tool call detected
                 logger.debug(
-                    "Executing tool",
-                    tool_name=tool_call["name"],
+                    "Claude response",
+                    stop_reason=response.stop_reason,
+                    num_content_blocks=len(response.content),
                 )
 
-                # Execute the tool
-                result = self._execute_tool(
-                    tool_name=tool_call["name"],
-                    tool_input=tool_call["args"],
-                )
+            except Exception as e:
+                logger.error(f"Claude request failed: {e}")
+                return f"Error communicating with Claude API: {e}"
 
-                # Add assistant thought/action and tool result to history
-                messages.append(("assistant", response_text))
-                messages.append(("observation", result))
+            # Check if Claude wants to use a tool
+            if response.stop_reason == "tool_use":
+                # Extract tool use block
+                tool_use_block = None
+                text_blocks = []
 
-            else:
-                # No tool call - model provided final answer
-                logger.info("Agent provided final answer")
-                return response_text
+                for block in response.content:
+                    if block.type == "tool_use":
+                        tool_use_block = block
+                    elif block.type == "text":
+                        text_blocks.append(block.text)
+
+                if tool_use_block:
+                    # Add Claude's response to messages
+                    messages.append({"role": "assistant", "content": response.content})
+
+                    # Execute the tool
+                    logger.debug(
+                        "Executing tool",
+                        tool_name=tool_use_block.name,
+                    )
+
+                    result = self._execute_tool(
+                        tool_name=tool_use_block.name,
+                        tool_input=tool_use_block.input,
+                    )
+
+                    # Add tool result to messages
+                    messages.append({
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": tool_use_block.id,
+                                "content": result,
+                            }
+                        ]
+                    })
+
+                    continue
+
+            # No tool use - Claude provided final answer
+            if response.stop_reason == "end_turn":
+                # Extract text from response
+                for block in response.content:
+                    if block.type == "text":
+                        logger.info("Agent provided final answer")
+                        return block.text
 
         # Max turns reached
         logger.warning(f"Max turns ({self.max_turns}) reached without final answer")
         return "Max reasoning turns reached. Please try a simpler query."
 
-    def _build_prompt(self, messages: List[tuple], user_query: str) -> str:
-        """
-        Build full prompt for Ollama including system prompt and conversation.
-
-        Args:
-            messages: List of (role, content) tuples from conversation
-            user_query: The original user query
-
-        Returns:
-            Full prompt string for Ollama
-        """
-        prompt_parts = [OLLAMA_AGENT_SYSTEM_PROMPT, "\n\n"]
-
-        # Add conversation history
-        for role, content in messages:
-            if role == "assistant":
-                prompt_parts.append(f"ASSISTANT:\n{content}\n\n")
-            elif role == "observation":
-                prompt_parts.append(f"OBSERVATION:\n{content}\n\n")
-
-        # Add current user query on first turn
-        if not messages:
-            prompt_parts.append(f"USER: {user_query}\n\n")
-
-        # Prompt for next response
-        prompt_parts.append("ASSISTANT:")
-
-        return "".join(prompt_parts)
-
-    def _parse_tool_call(self, response_text: str) -> Optional[Dict[str, Any]]:
-        """
-        Parse tool call from Ollama response using regex.
-
-        Expects format:
-            THOUGHT: [reasoning]
-            ACTION: tool_name(param1="value1", param2=value2)
-
-        Args:
-            response_text: Response text from Ollama
-
-        Returns:
-            Dict with 'name' and 'args' keys, or None if no tool call
-        """
-        # Match ACTION: tool_name(...)
-        action_pattern = r'ACTION:\s*(\w+)\s*\((.*?)\)\s*(?:\n|$)'
-        match = re.search(action_pattern, response_text, re.IGNORECASE)
-
-        if not match:
-            return None
-
-        tool_name = match.group(1)
-        args_str = match.group(2)
-
-        # Parse arguments
-        args = {}
-        if args_str.strip():
-            # Match key="value" or key=value patterns
-            arg_pattern = r'(\w+)\s*=\s*["\']?([^"\',)]*)["\']?'
-            arg_matches = re.findall(arg_pattern, args_str)
-
-            for key, value in arg_matches:
-                # Try to parse as number if possible
-                try:
-                    args[key] = int(value)
-                except ValueError:
-                    try:
-                        args[key] = float(value)
-                    except ValueError:
-                        args[key] = value.strip()
-
-        logger.debug(
-            "Parsed tool call",
-            tool_name=tool_name,
-            args=args,
-        )
-
-        return {"name": tool_name, "args": args}
 
     def _execute_tool(self, tool_name: str, tool_input: Dict[str, Any]) -> str:
         """
@@ -421,7 +327,7 @@ class TriageAgent:
         print("\n" + "=" * 60)
         print("SentryLens Error Triage Agent - Interactive Mode")
         print("=" * 60)
-        print(f"Model: {self.model} (via Ollama at {self.ollama_base_url})")
+        print(f"Model: {self.model} (Claude API)")
         print(f"Knowledge base: {len(self.errors_dict)} errors")
         print(f"Max reasoning turns: {self.max_turns}")
         print("Type 'help' for examples or 'exit' to quit\n")
