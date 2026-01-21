@@ -1,0 +1,36 @@
+# Core ML
+torch>=2.0.0
+transformers>=4.35.0
+sentence-transformers>=5.1.0
+datasets>=2.14.0
+
+# Data processing
+pandas>=2.0.0
+numpy>=1.24.0
+scikit-learn>=1.6.0
+
+# Configuration
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+
+# Utilities
+tqdm>=4.66.0
+pyyaml>=6.0.0
+loguru>=0.7.0
+wandb>=0.15.0           # Optional: for experiment tracking
+
+# Testing
+pytest>=7.4.0
+
+# ML & Embeddings
+faiss-cpu==1.7.4
+huggingface-hub>=0.36.0,<1.0
+
+# Clustering
+hdbscan==0.8.33
+
+# Extra
+anthropic==0.25.0
+
+# Utilities
+python-dotenv==1.0.0
