@@ -6,7 +6,7 @@ Agentic AI system for error triage. Learning project for building production-gra
 
 **Completed:**
 - Data loading (Eclipse AERI dataset)
-- Embeddings (sentence-transformers + FAISS)
+- Embeddings (sentence-transformers + Hnswlib)
 - Clustering (HDBSCAN)
 - ReAct agent (Claude API with native tool_use)
 
@@ -17,7 +17,7 @@ Agentic AI system for error triage. Learning project for building production-gra
 ## Architecture
 
 ```
-AERI JSON → DataLoader → Embedder → FAISS → Clusterer → ReAct Agent
+AERI JSON → DataLoader → Embedder → Hnswlib → Clusterer → ReAct Agent
 ```
 
 ## Structure
@@ -30,7 +30,7 @@ src/sentrylens/
 ├── clustering/     # HDBSCAN clustering
 ├── core/           # Pydantic models
 ├── data/           # Data loading
-├── embeddings/     # Embedder + FAISS vector store
+├── embeddings/     # Embedder + Hnswlib vector store
 └── utils/          # Logger
 ```
 
@@ -51,7 +51,7 @@ python scripts/demo_agent.py
 |------|---------|
 | `src/sentrylens/agent/triage_agent.py` | ReAct loop with Claude |
 | `src/sentrylens/agent/tools.py` | search_similar, analyze_stack, suggest_fix |
-| `src/sentrylens/embeddings/vector_store.py` | FAISS operations |
+| `src/sentrylens/embeddings/vector_store.py` | Hnswlib vector store operations |
 | `src/sentrylens/clustering/clusterer.py` | HDBSCAN clustering |
 | `scripts/demo_agent.py` | Interactive agent demo |
 
@@ -59,6 +59,6 @@ python scripts/demo_agent.py
 
 - `anthropic` - Claude API
 - `sentence-transformers` - Embeddings
-- `faiss-cpu` - Vector search
+- `hnswlib` - Vector search
 - `hdbscan` - Clustering
 - `pydantic` - Data models

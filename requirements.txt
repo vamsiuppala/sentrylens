@@ -23,7 +23,7 @@ wandb>=0.15.0           # Optional: for experiment tracking
 pytest>=7.4.0
 
 # ML & Embeddings
-faiss-cpu==1.7.4
+hnswlib>=0.7.0
 huggingface-hub>=0.36.0,<1.0
 
 # Clustering

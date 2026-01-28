@@ -12,7 +12,7 @@ sentrylens/
 │   │   ├── incidents_extract.csv
 │   │   └── output_problems/        # Individual problem JSON files
 │   ├── embeddings/                 # Generated embeddings (.npy)
-│   ├── indexes/                    # FAISS indexes
+│   ├── indexes/                    # Hnswlib indexes
 │   ├── processed/                  # Processed data + cluster assignments
 │   └── swebench/                   # SWE-bench data (optional)
 │
@@ -58,7 +58,7 @@ sentrylens/
 │   ├── embeddings/                 # Embeddings module
 │   │   ├── __init__.py
 │   │   ├── embedder.py             # Sentence transformer wrapper
-│   │   └── vector_store.py         # FAISS vector store
+│   │   └── vector_store.py         # Hnswlib vector store
 │   │
 │   └── utils/                      # Utilities
 │       ├── __init__.py
