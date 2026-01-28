@@ -2,41 +2,59 @@
 """
 Demo script for the ReAct error triage agent using Claude API.
 
-Shows how to use the TriageAgent with Claude.
-
-Prerequisites:
-    1. Set ANTHROPIC_API_KEY environment variable with your Claude API key
-    2. Ensure embeddings and clustering data is available in data/
-
 Usage:
     # Interactive mode
-    ANTHROPIC_API_KEY=sk-ant-... python scripts/demo_agent.py
+    python scripts/demo_agent.py --vector-store data/indexes/hnswlib_index_* --cluster-data data/processed/clusters_*.json
 
-    # Programmatic usage
-    ANTHROPIC_API_KEY=sk-ant-... python scripts/demo_agent.py --example
-
-Or in code:
-    from src.sentrylens.agent import TriageAgent
-    import os
-
-    os.environ["ANTHROPIC_API_KEY"] = "sk-ant-..."
-
-    agent = TriageAgent()
-    response = agent.run("Help me fix NullPointerException")
-    print(response)
+    # Programmatic example
+    python scripts/demo_agent.py --vector-store data/indexes/hnswlib_index_* --cluster-data data/processed/clusters_*.json --example
 """
+import argparse
 import sys
 from pathlib import Path
 
-# Add project root to path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
-
-from src.sentrylens.agent import TriageAgent
-from src.sentrylens.utils.logger import logger
+from sentrylens.agent import TriageAgent
+from sentrylens.utils.logger import logger
 
 
-def main():
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="SentryLens Error Triage Agent Demo"
+    )
+    parser.add_argument(
+        "--vector-store",
+        type=Path,
+        required=True,
+        help="Path to Hnswlib vector store directory"
+    )
+    parser.add_argument(
+        "--cluster-data",
+        type=Path,
+        required=True,
+        help="Path to cluster data JSON file"
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="claude-3-5-haiku-20241022",
+        help="Claude model to use (default: claude-3-5-haiku-20241022)"
+    )
+    parser.add_argument(
+        "--max-turns",
+        type=int,
+        default=10,
+        help="Maximum ReAct turns (default: 10)"
+    )
+    parser.add_argument(
+        "--example",
+        action="store_true",
+        help="Run programmatic example instead of interactive mode"
+    )
+    return parser.parse_args()
+
+
+def main(args):
     """Run interactive agent demo."""
     print("\n" + "=" * 60)
     print("SentryLens Error Triage Agent - Interactive Demo")
@@ -49,7 +67,12 @@ def main():
     try:
         # Initialize agent
         print("\n✓ Initializing agent...")
-        agent = TriageAgent()
+        agent = TriageAgent(
+            vector_store_path=args.vector_store,
+            cluster_data_path=args.cluster_data,
+            model=args.model,
+            max_turns=args.max_turns,
+        )
 
         print(f"✓ Agent initialized successfully")
         print(f"✓ Knowledge base: {len(agent.errors_dict)} errors")
@@ -74,9 +97,11 @@ def main():
         print(f"\n✗ Error: {e}")
         print("\nSetup Instructions:")
         print("  1. Get your Claude API key from: https://console.anthropic.com/")
-        print("  2. Set the environment variable:")
-        print("     export ANTHROPIC_API_KEY=sk-ant-...")
-        print("  3. Run this script again")
+        print("  2. Create .env file:")
+        print("     cp .env.example .env")
+        print("  3. Add your API key to .env:")
+        print("     ANTHROPIC_API_KEY=sk-ant-...")
+        print("  4. Run this script again")
         sys.exit(1)
 
     except KeyboardInterrupt:
@@ -89,48 +114,36 @@ def main():
         sys.exit(1)
 
 
-def example_programmatic_usage():
-    """
-    Example of using the agent programmatically.
-
-    This function shows how to use the agent without interactive mode.
-    """
+def example_programmatic_usage(args):
+    """Run programmatic example."""
     print("\n" + "=" * 60)
     print("Programmatic Usage Example (Claude API)")
     print("=" * 60)
 
     try:
-        # Initialize agent with Claude
         print("\nInitializing agent with Claude API...")
-        agent = TriageAgent(max_turns=5)
+        agent = TriageAgent(
+            vector_store_path=args.vector_store,
+            cluster_data_path=args.cluster_data,
+            model=args.model,
+            max_turns=5,
+        )
         print("✓ Agent initialized")
 
-        # Example 1: Ask about a specific error
-        print("\n1. Getting information about a specific error:")
+        # Example 1: Find similar errors
+        print("\n1. Finding similar errors:")
         print("-" * 40)
-        response = agent.run(
-            "Help me understand and fix error 3d0af1bba06c8bc40f9eb7c7a56da2c5"
-        )
+        response = agent.run("Find errors similar to NullPointerException")
         print(response)
 
-        # Example 2: Find similar errors
-        print("\n2. Finding similar errors:")
-        print("-" * 40)
-        response = agent.run(
-            "Find errors similar to NullPointerException"
-        )
-        print(response)
-
-        # Example 3: Analyze stack trace
-        print("\n3. Analyzing a stack trace:")
+        # Example 2: Analyze stack trace
+        print("\n2. Analyzing a stack trace:")
         print("-" * 40)
         stack_trace = """at com.example.UserService.getUser(UserService.java:42)
 at com.example.UserController.handleRequest(UserController.java:28)
 at javax.servlet.http.HttpServlet.service(HttpServlet.java:750)"""
 
-        response = agent.run(
-            f"Help me understand this stack trace:\n{stack_trace}"
-        )
+        response = agent.run(f"Help me understand this stack trace:\n{stack_trace}")
         print(response)
 
     except ValueError as e:
@@ -139,10 +152,9 @@ at javax.servlet.http.HttpServlet.service(HttpServlet.java:750)"""
 
 
 if __name__ == "__main__":
-    # Check if running in demo mode or programmatic mode
-    if len(sys.argv) > 1 and sys.argv[1] == "--example":
-        # Run example programmatic usage
-        example_programmatic_usage()
+    args = parse_args()
+
+    if args.example:
+        example_programmatic_usage(args)
     else:
-        # Run interactive chat
-        main()
+        main(args)
