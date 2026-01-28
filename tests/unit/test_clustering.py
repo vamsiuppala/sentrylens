@@ -6,9 +6,9 @@ import numpy as np
 from pathlib import Path
 import tempfile
 
-from src.sentrylens.clustering.clusterer import HDBSCANClusterer, ClusterStats
-from src.sentrylens.core.models import AERIErrorRecord, ErrorEmbedding
-from configs.settings import settings
+from sentrylens.clustering.clusterer import HDBSCANClusterer, ClusterStats
+from sentrylens.core.models import AERIErrorRecord, ErrorEmbedding
+from sentrylens.config import settings
 
 
 @pytest.fixture

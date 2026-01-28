@@ -4,9 +4,9 @@ Unit tests for ErrorEmbedder.
 import pytest
 import numpy as np
 
-from src.sentrylens.embeddings.embedder import ErrorEmbedder
-from src.sentrylens.core.models import AERIErrorRecord
-from configs.settings import settings
+from sentrylens.embeddings.embedder import ErrorEmbedder
+from sentrylens.core.models import AERIErrorRecord
+from sentrylens.config import settings
 
 
 @pytest.fixture

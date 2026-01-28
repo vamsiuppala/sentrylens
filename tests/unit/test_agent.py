@@ -8,8 +8,8 @@ import json
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 
-from src.sentrylens.agent.triage_agent import TriageAgent
-from src.sentrylens.core.models import (
+from sentrylens.agent.triage_agent import TriageAgent
+from sentrylens.core.models import (
     AERIErrorRecord,
     ClusterAssignment,
     ErrorEmbedding,
@@ -72,11 +72,11 @@ def mock_data_dir(tmp_path, sample_errors, sample_clusters):
     # Create indexes directory
     indexes_dir = tmp_path / "indexes"
     indexes_dir.mkdir()
-    vector_store_dir = indexes_dir / "faiss_index_20260120_132919"
+    vector_store_dir = indexes_dir / "hnswlib_index_20260120_132919"
     vector_store_dir.mkdir()
 
-    # Create dummy FAISS files
-    (vector_store_dir / "index.faiss").write_text("dummy")
+    # Create dummy Hnswlib files
+    (vector_store_dir / "index.hnsw").write_text("dummy")
     (vector_store_dir / "metadata.pkl").write_text("dummy")
 
     # Create processed directory with cluster data
@@ -104,9 +104,9 @@ def mock_client():
 class TestTriageAgentInitialization:
     """Tests for TriageAgent initialization."""
 
-    @patch('src.sentrylens.agent.triage_agent.FAISSVectorStore')
-    @patch('src.sentrylens.agent.triage_agent.ErrorEmbedder')
-    @patch('src.sentrylens.agent.triage_agent.Anthropic')
+    @patch('sentrylens.agent.triage_agent.HnswlibVectorStore')
+    @patch('sentrylens.agent.triage_agent.ErrorEmbedder')
+    @patch('sentrylens.agent.triage_agent.Anthropic')
     def test_agent_initialization(
         self,
         mock_anthropic,
@@ -123,7 +123,7 @@ class TestTriageAgentInitialization:
 
         agent = TriageAgent(
             data_dir=mock_data_dir,
-            vector_store_path=mock_data_dir / "indexes" / "faiss_index_20260120_132919",
+            vector_store_path=mock_data_dir / "indexes" / "hnswlib_index_20260120_132919",
         )
 
         assert agent.model == "claude-3-5-sonnet-20241022"
@@ -131,9 +131,9 @@ class TestTriageAgentInitialization:
         assert agent.vector_store is not None
         assert agent.embedder is not None
 
-    @patch('src.sentrylens.agent.triage_agent.FAISSVectorStore')
-    @patch('src.sentrylens.agent.triage_agent.ErrorEmbedder')
-    @patch('src.sentrylens.agent.triage_agent.Anthropic')
+    @patch('sentrylens.agent.triage_agent.HnswlibVectorStore')
+    @patch('sentrylens.agent.triage_agent.ErrorEmbedder')
+    @patch('sentrylens.agent.triage_agent.Anthropic')
     def test_agent_loads_data(
         self,
         mock_anthropic,
@@ -150,16 +150,16 @@ class TestTriageAgentInitialization:
 
         agent = TriageAgent(
             data_dir=mock_data_dir,
-            vector_store_path=mock_data_dir / "indexes" / "faiss_index_20260120_132919",
+            vector_store_path=mock_data_dir / "indexes" / "hnswlib_index_20260120_132919",
         )
 
         # Check that data was loaded
         assert len(agent.errors_dict) == 3
         assert len(agent.clusters_dict) == 3
 
-    @patch('src.sentrylens.agent.triage_agent.FAISSVectorStore')
-    @patch('src.sentrylens.agent.triage_agent.ErrorEmbedder')
-    @patch('src.sentrylens.agent.triage_agent.Anthropic')
+    @patch('sentrylens.agent.triage_agent.HnswlibVectorStore')
+    @patch('sentrylens.agent.triage_agent.ErrorEmbedder')
+    @patch('sentrylens.agent.triage_agent.Anthropic')
     def test_agent_initializes_tools(
         self,
         mock_anthropic,
@@ -176,7 +176,7 @@ class TestTriageAgentInitialization:
 
         agent = TriageAgent(
             data_dir=mock_data_dir,
-            vector_store_path=mock_data_dir / "indexes" / "faiss_index_20260120_132919",
+            vector_store_path=mock_data_dir / "indexes" / "hnswlib_index_20260120_132919",
         )
 
         assert agent.tools is not None
@@ -188,9 +188,9 @@ class TestTriageAgentInitialization:
 class TestTriageAgentRun:
     """Tests for TriageAgent.run() method."""
 
-    @patch('src.sentrylens.agent.triage_agent.FAISSVectorStore')
-    @patch('src.sentrylens.agent.triage_agent.ErrorEmbedder')
-    @patch('src.sentrylens.agent.triage_agent.Anthropic')
+    @patch('sentrylens.agent.triage_agent.HnswlibVectorStore')
+    @patch('sentrylens.agent.triage_agent.ErrorEmbedder')
+    @patch('sentrylens.agent.triage_agent.Anthropic')
     def test_run_returns_string(
         self,
         mock_anthropic_class,
@@ -217,7 +217,7 @@ class TestTriageAgentRun:
 
         agent = TriageAgent(
             data_dir=mock_data_dir,
-            vector_store_path=mock_data_dir / "indexes" / "faiss_index_20260120_132919",
+            vector_store_path=mock_data_dir / "indexes" / "hnswlib_index_20260120_132919",
         )
 
         result = agent.run("Help me understand error_001")
@@ -225,9 +225,9 @@ class TestTriageAgentRun:
         assert isinstance(result, str)
         assert len(result) > 0
 
-    @patch('src.sentrylens.agent.triage_agent.FAISSVectorStore')
-    @patch('src.sentrylens.agent.triage_agent.ErrorEmbedder')
-    @patch('src.sentrylens.agent.triage_agent.Anthropic')
+    @patch('sentrylens.agent.triage_agent.HnswlibVectorStore')
+    @patch('sentrylens.agent.triage_agent.ErrorEmbedder')
+    @patch('sentrylens.agent.triage_agent.Anthropic')
     def test_run_handles_tool_calls(
         self,
         mock_anthropic_class,
@@ -266,7 +266,7 @@ class TestTriageAgentRun:
 
         agent = TriageAgent(
             data_dir=mock_data_dir,
-            vector_store_path=mock_data_dir / "indexes" / "faiss_index_20260120_132919",
+            vector_store_path=mock_data_dir / "indexes" / "hnswlib_index_20260120_132919",
         )
 
         result = agent.run("Find similar errors")
@@ -274,9 +274,9 @@ class TestTriageAgentRun:
         assert isinstance(result, str)
         assert "Final answer" in result
 
-    @patch('src.sentrylens.agent.triage_agent.FAISSVectorStore')
-    @patch('src.sentrylens.agent.triage_agent.ErrorEmbedder')
-    @patch('src.sentrylens.agent.triage_agent.Anthropic')
+    @patch('sentrylens.agent.triage_agent.HnswlibVectorStore')
+    @patch('sentrylens.agent.triage_agent.ErrorEmbedder')
+    @patch('sentrylens.agent.triage_agent.Anthropic')
     def test_run_max_turns(
         self,
         mock_anthropic_class,
@@ -310,7 +310,7 @@ class TestTriageAgentRun:
 
         agent = TriageAgent(
             data_dir=mock_data_dir,
-            vector_store_path=mock_data_dir / "indexes" / "faiss_index_20260120_132919",
+            vector_store_path=mock_data_dir / "indexes" / "hnswlib_index_20260120_132919",
             max_turns=2,
         )
 
@@ -323,9 +323,9 @@ class TestTriageAgentRun:
 class TestToolExecution:
     """Tests for tool execution in the agent."""
 
-    @patch('src.sentrylens.agent.triage_agent.FAISSVectorStore')
-    @patch('src.sentrylens.agent.triage_agent.ErrorEmbedder')
-    @patch('src.sentrylens.agent.triage_agent.Anthropic')
+    @patch('sentrylens.agent.triage_agent.HnswlibVectorStore')
+    @patch('sentrylens.agent.triage_agent.ErrorEmbedder')
+    @patch('sentrylens.agent.triage_agent.Anthropic')
     def test_execute_search_similar_errors(
         self,
         mock_anthropic_class,
@@ -347,7 +347,7 @@ class TestToolExecution:
 
         agent = TriageAgent(
             data_dir=mock_data_dir,
-            vector_store_path=mock_data_dir / "indexes" / "faiss_index_20260120_132919",
+            vector_store_path=mock_data_dir / "indexes" / "hnswlib_index_20260120_132919",
         )
 
         result = agent._execute_tool(
@@ -359,9 +359,9 @@ class TestToolExecution:
         parsed = json.loads(result)
         assert isinstance(parsed, list)
 
-    @patch('src.sentrylens.agent.triage_agent.FAISSVectorStore')
-    @patch('src.sentrylens.agent.triage_agent.ErrorEmbedder')
-    @patch('src.sentrylens.agent.triage_agent.Anthropic')
+    @patch('sentrylens.agent.triage_agent.HnswlibVectorStore')
+    @patch('sentrylens.agent.triage_agent.ErrorEmbedder')
+    @patch('sentrylens.agent.triage_agent.Anthropic')
     def test_execute_analyze_stack_trace(
         self,
         mock_anthropic_class,
@@ -381,7 +381,7 @@ class TestToolExecution:
 
         agent = TriageAgent(
             data_dir=mock_data_dir,
-            vector_store_path=mock_data_dir / "indexes" / "faiss_index_20260120_132919",
+            vector_store_path=mock_data_dir / "indexes" / "hnswlib_index_20260120_132919",
         )
 
         stack_trace = "at com.example.Service.process(Service.java:42)"
@@ -395,9 +395,9 @@ class TestToolExecution:
         parsed = json.loads(result)
         assert "exception_type" in parsed
 
-    @patch('src.sentrylens.agent.triage_agent.FAISSVectorStore')
-    @patch('src.sentrylens.agent.triage_agent.ErrorEmbedder')
-    @patch('src.sentrylens.agent.triage_agent.Anthropic')
+    @patch('sentrylens.agent.triage_agent.HnswlibVectorStore')
+    @patch('sentrylens.agent.triage_agent.ErrorEmbedder')
+    @patch('sentrylens.agent.triage_agent.Anthropic')
     def test_execute_suggest_fix(
         self,
         mock_anthropic_class,
@@ -419,7 +419,7 @@ class TestToolExecution:
 
         agent = TriageAgent(
             data_dir=mock_data_dir,
-            vector_store_path=mock_data_dir / "indexes" / "faiss_index_20260120_132919",
+            vector_store_path=mock_data_dir / "indexes" / "hnswlib_index_20260120_132919",
         )
 
         result = agent._execute_tool("suggest_fix", {"error_id": "error_001"})
@@ -429,9 +429,9 @@ class TestToolExecution:
         assert "error_id" in parsed
         assert "suggestion" in parsed
 
-    @patch('src.sentrylens.agent.triage_agent.FAISSVectorStore')
-    @patch('src.sentrylens.agent.triage_agent.ErrorEmbedder')
-    @patch('src.sentrylens.agent.triage_agent.Anthropic')
+    @patch('sentrylens.agent.triage_agent.HnswlibVectorStore')
+    @patch('sentrylens.agent.triage_agent.ErrorEmbedder')
+    @patch('sentrylens.agent.triage_agent.Anthropic')
     def test_execute_unknown_tool(
         self,
         mock_anthropic_class,
@@ -451,7 +451,7 @@ class TestToolExecution:
 
         agent = TriageAgent(
             data_dir=mock_data_dir,
-            vector_store_path=mock_data_dir / "indexes" / "faiss_index_20260120_132919",
+            vector_store_path=mock_data_dir / "indexes" / "hnswlib_index_20260120_132919",
         )
 
         result = agent._execute_tool("unknown_tool", {})

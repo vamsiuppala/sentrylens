@@ -7,8 +7,8 @@ import pytest
 import json
 from unittest.mock import Mock, MagicMock
 
-from src.sentrylens.agent.tools import TriageTools
-from src.sentrylens.core.models import (
+from sentrylens.agent.tools import TriageTools
+from sentrylens.core.models import (
     AERIErrorRecord,
     ClusterAssignment,
     ErrorEmbedding,

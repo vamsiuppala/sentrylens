@@ -5,13 +5,13 @@ import pytest
 from datetime import datetime
 from pydantic import ValidationError
 
-from src.sentrylens.core.models import (
+from sentrylens.core.models import (
     AERIErrorRecord,
     SeverityLevel,
     ErrorEmbedding,
     ClusterAssignment,
 )
-from configs.settings import settings
+from sentrylens.config import settings
 
 
 class TestAERIErrorRecord:
