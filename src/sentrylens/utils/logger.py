@@ -8,10 +8,7 @@ from pathlib import Path
 from loguru import logger
 from typing import Any, Dict
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
-
-from configs.settings import settings
+from sentrylens.config import settings
 
 
 class InterceptHandler:

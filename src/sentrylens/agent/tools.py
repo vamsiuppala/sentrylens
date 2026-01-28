@@ -8,14 +8,13 @@ Implements three main tools:
 """
 import re
 import json
-import requests
 from pathlib import Path
 from typing import List, Dict, Optional, Any, Tuple
 
-from src.sentrylens.core.models import AERIErrorRecord, ClusterAssignment
-from src.sentrylens.embeddings.vector_store import FAISSVectorStore
-from src.sentrylens.embeddings.embedder import ErrorEmbedder
-from src.sentrylens.utils.logger import logger
+from sentrylens.core.models import AERIErrorRecord, ClusterAssignment
+from sentrylens.embeddings.vector_store import HnswlibVectorStore
+from sentrylens.embeddings.embedder import ErrorEmbedder
+from sentrylens.utils.logger import logger
 
 
 class TriageTools:
@@ -27,7 +26,7 @@ class TriageTools:
 
     def __init__(
         self,
-        vector_store: FAISSVectorStore,
+        vector_store: HnswlibVectorStore,
         embedder: ErrorEmbedder,
         errors_dict: Dict[str, AERIErrorRecord],
         clusters_dict: Dict[str, ClusterAssignment],
@@ -36,7 +35,7 @@ class TriageTools:
         Initialize tools with references to Step 1-3 infrastructure.
 
         Args:
-            vector_store: FAISS vector store for similarity search (Step 2)
+            vector_store: Hnswlib vector store for similarity search (Step 2)
             embedder: ErrorEmbedder for generating embeddings (Step 2)
             errors_dict: Dictionary mapping error_id to AERIErrorRecord (Step 1)
             clusters_dict: Dictionary mapping error_id to ClusterAssignment (Step 3)
@@ -56,7 +55,7 @@ class TriageTools:
         """
         Find errors similar to a query using vector similarity search.
 
-        Uses the ErrorEmbedder and FAISSVectorStore from Step 2 to find semantically
+        Uses the ErrorEmbedder and HnswlibVectorStore from Step 2 to find semantically
         similar errors based on embedding distance.
 
         Args:
@@ -74,7 +73,7 @@ class TriageTools:
 
         try:
             # Create temporary error record from query text
-            from src.sentrylens.core.models import AERIErrorRecord
+            from sentrylens.core.models import AERIErrorRecord
 
             temp_error = AERIErrorRecord(
                 error_id="query",
@@ -87,7 +86,7 @@ class TriageTools:
             query_embedding_obj = self.embedder.embed_single(temp_error)
             query_embedding = query_embedding_obj.embedding
 
-            # Search vector store (Step 2: FAISS)
+            # Search vector store (Step 2: Hnswlib)
             results = self.vector_store.search(
                 query_embedding, top_k=top_k
             )

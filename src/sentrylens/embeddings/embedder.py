@@ -10,10 +10,10 @@ import torch
 from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 
-from src.sentrylens.core.models import AERIErrorRecord, ErrorEmbedding
-from src.sentrylens.core.exceptions import EmbeddingError
-from src.sentrylens.utils.logger import logger
-from configs.settings import settings
+from sentrylens.core.models import AERIErrorRecord, ErrorEmbedding
+from sentrylens.core.exceptions import EmbeddingError
+from sentrylens.utils.logger import logger
+from sentrylens.config import settings
 
 
 class ErrorEmbedder:

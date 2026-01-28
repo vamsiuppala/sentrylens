@@ -8,15 +8,19 @@ import json
 import os
 from pathlib import Path
 from typing import Optional, List, Dict, Any
+from dotenv import load_dotenv
 from anthropic import Anthropic
 
-from src.sentrylens.data.loader import AERIDataLoader
-from src.sentrylens.embeddings.vector_store import FAISSVectorStore
-from src.sentrylens.embeddings.embedder import ErrorEmbedder
-from src.sentrylens.core.models import AERIErrorRecord, ClusterAssignment
-from src.sentrylens.agent.tools import TriageTools
-from src.sentrylens.agent.prompts import TRIAGE_AGENT_SYSTEM_PROMPT
-from src.sentrylens.utils.logger import logger
+# Fix for macOS OpenMP compatibility
+os.environ.setdefault('KMP_DUPLICATE_LIB_OK', 'TRUE')
+
+from sentrylens.data.loader import AERIDataLoader
+from sentrylens.embeddings.vector_store import HnswlibVectorStore
+from sentrylens.embeddings.embedder import ErrorEmbedder
+from sentrylens.core.models import AERIErrorRecord, ClusterAssignment
+from sentrylens.agent.tools import TriageTools
+from sentrylens.agent.prompts import TRIAGE_AGENT_SYSTEM_PROMPT
+from sentrylens.utils.logger import logger
 
 
 class TriageAgent:
@@ -26,37 +30,41 @@ class TriageAgent:
     Architecture:
     - Uses Claude API for reasoning via Anthropic SDK
     - Leverages native tool_use capability for clean tool calling
-    - Integrates with FAISS vector store for similarity search
+    - Integrates with Hnswlib vector store for similarity search
     - Leverages embedding and clustering from Steps 1-3
     - Implements ReAct loop for multi-turn reasoning with claude-3-5-sonnet
     """
 
     def __init__(
         self,
-        data_dir: Optional[Path] = None,
-        vector_store_path: Optional[Path] = None,
-        model: str = "claude-3-5-sonnet-20241022",
+        vector_store_path: Path,
+        cluster_data_path: Path,
+        model: str = "claude-3-5-haiku-20241022",
         max_turns: int = 10,
     ):
         """
         Initialize the triage agent.
 
         Args:
-            data_dir: Base data directory (default: project data/)
-            vector_store_path: Path to FAISS vector store
-            model: Claude model to use (default: claude-3-5-sonnet-20241022)
+            vector_store_path: Path to Hnswlib vector store
+            cluster_data_path: Path to cluster data JSON file
+            model: Claude model to use (default: claude-3-5-haiku-20241022)
             max_turns: Maximum number of ReAct turns
         """
-        self.data_dir = data_dir or Path("data")
         self.model = model
         self.max_turns = max_turns
+        self.cluster_data_path = Path(cluster_data_path)
+        self.vector_store_path = Path(vector_store_path)
+
+        # Load environment variables from .env file
+        load_dotenv()
 
         # Initialize Claude client (uses ANTHROPIC_API_KEY environment variable)
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
             raise ValueError(
-                "ANTHROPIC_API_KEY environment variable not set. "
-                "Please set it to use Claude API."
+                "ANTHROPIC_API_KEY not found. "
+                "Set it in .env file or as an environment variable."
             )
 
         self.client = Anthropic(api_key=api_key)
@@ -65,15 +73,13 @@ class TriageAgent:
             "Initializing TriageAgent",
             model=model,
             max_turns=max_turns,
+            vector_store_path=str(self.vector_store_path),
+            cluster_data_path=str(self.cluster_data_path),
         )
 
-        # Step 1: Load vector store (Step 2 artifact)
-        if vector_store_path is None:
-            # Auto-detect latest vector store
-            vector_store_path = self._find_latest_vector_store()
-
-        logger.info("Loading vector store", path=str(vector_store_path))
-        self.vector_store = FAISSVectorStore.load(vector_store_path)
+        # Step 1: Load vector store
+        logger.info("Loading vector store", path=str(self.vector_store_path))
+        self.vector_store = HnswlibVectorStore.load(self.vector_store_path)
 
         # Step 2: Initialize embedder (Step 2 artifact)
         logger.info("Initializing embedder")
@@ -101,56 +107,18 @@ class TriageAgent:
             )),
         )
 
-    def _find_latest_vector_store(self) -> Path:
-        """
-        Auto-detect the latest vector store directory.
-
-        Returns:
-            Path to latest vector store
-        """
-        indexes_dir = self.data_dir / "indexes"
-        if not indexes_dir.exists():
-            raise FileNotFoundError(f"Indexes directory not found: {indexes_dir}")
-
-        # Find all vector store directories
-        vector_stores = sorted(
-            [d for d in indexes_dir.iterdir() if d.is_dir()],
-            key=lambda p: p.name,
-            reverse=True,  # Newest first
-        )
-
-        if not vector_stores:
-            raise FileNotFoundError(f"No vector stores found in {indexes_dir}")
-
-        path = vector_stores[0]
-        logger.info("Auto-detected vector store", path=str(path))
-        return path
-
     def _load_data(self) -> tuple[Dict[str, AERIErrorRecord], Dict[str, ClusterAssignment]]:
         """
-        Load error records and cluster assignments.
+        Load error records and cluster assignments from cluster_data_path.
 
         Returns:
             Tuple of (errors_dict, clusters_dict)
         """
-        # Find latest processed dataset
-        processed_dir = self.data_dir / "processed"
-        processed_files = sorted(
-            [f for f in processed_dir.glob("clusters_*.json")],
-            reverse=True,
-        )
+        logger.info("Loading cluster data", path=str(self.cluster_data_path))
 
-        if not processed_files:
-            raise FileNotFoundError(f"No cluster data found in {processed_dir}")
-
-        cluster_file = processed_files[0]
-        logger.info("Loading cluster data", path=str(cluster_file))
-
-        # Load cluster data
-        with open(cluster_file, 'r') as f:
+        with open(self.cluster_data_path, 'r') as f:
             cluster_data = json.load(f)
 
-        # Parse errors and clusters
         errors_dict = {}
         clusters_dict = {}
 

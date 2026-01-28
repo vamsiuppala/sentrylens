@@ -122,7 +122,7 @@ class ErrorEmbedding(BaseModel):
     @classmethod
     def validate_embedding_dimension(cls, v: List[float]) -> List[float]:
         """Ensure embedding has expected dimension."""
-        from configs.settings import settings
+        from sentrylens.config import settings
         if len(v) != settings.EMBEDDING_DIMENSION:
             raise ValueError(
                 f"Embedding dimension mismatch: expected {settings.EMBEDDING_DIMENSION}, "

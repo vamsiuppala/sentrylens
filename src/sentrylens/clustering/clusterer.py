@@ -8,14 +8,14 @@ from typing import List, Dict, Any, Tuple, Optional
 from dataclasses import dataclass
 import hdbscan
 
-from src.sentrylens.core.models import (
+from sentrylens.core.models import (
     AERIErrorRecord,
     ErrorEmbedding,
     ClusterAssignment,
 )
-from src.sentrylens.core.exceptions import ClusteringError
-from src.sentrylens.utils.logger import logger
-from configs.settings import settings
+from sentrylens.core.exceptions import ClusteringError
+from sentrylens.utils.logger import logger
+from sentrylens.config import settings
 
 
 @dataclass
