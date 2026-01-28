@@ -79,3 +79,4 @@ logs/
 # Track exploration folder (learning/exploration files)
 !exploration/
 !exploration/**
+notebooks/
