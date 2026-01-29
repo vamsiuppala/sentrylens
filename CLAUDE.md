@@ -9,15 +9,31 @@ Agentic AI system for error triage. Learning project for building production-gra
 - Embeddings (sentence-transformers + Hnswlib)
 - Clustering (HDBSCAN)
 - ReAct agent (Claude API with native tool_use)
+- CLI interface (Typer)
 
-**TODO:**
-- CLI interface
-- FastAPI backend
+**Next Steps - Vertical Slice:**
+1. **FastAPI Backend** - REST API to expose agent functionality
+   - `POST /query` - Send queries to the triage agent
+   - `GET /errors/{id}` - Get error details
+   - `GET /clusters` - List clusters with stats
+   - `POST /errors/search` - Semantic search endpoint
+
+2. **Webhook Integration** - Receive errors from external sources
+   - `POST /webhooks/sentry` - Ingest Sentry error events
+   - Auto-embed and cluster incoming errors
+
+3. **Simple Web UI** (optional) - Basic interface for the agent
+   - Chat interface for agent queries
+   - Error browser with cluster visualization
 
 ## Architecture
 
 ```
 AERI JSON → DataLoader → Embedder → Hnswlib → Clusterer → ReAct Agent
+                                                              ↑
+                                                         FastAPI ← Web UI
+                                                              ↑
+                                                         Webhooks (Sentry)
 ```
 
 ## Structure
@@ -27,6 +43,7 @@ See `structure.txt` for full layout.
 ```
 src/sentrylens/
 ├── agent/          # ReAct agent + tools (Claude API)
+├── cli/            # Typer CLI commands
 ├── clustering/     # HDBSCAN clustering
 ├── core/           # Pydantic models
 ├── data/           # Data loading
@@ -39,10 +56,13 @@ src/sentrylens/
 ```bash
 # Setup
 export ANTHROPIC_API_KEY=sk-ant-...
-pip install -r requirements.txt
+pip install -e .
 
-# Run agent demo
-python scripts/demo_agent.py
+# Run full pipeline
+sentrylens pipeline -i data/aeri/output_problems -n 1000
+
+# Start interactive agent
+sentrylens agent data/indexes/hnswlib_index_* data/processed/clusters_*.json
 ```
 
 ## Key Files
