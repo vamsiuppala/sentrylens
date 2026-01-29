@@ -44,10 +44,10 @@ def ingest(
         raise typer.Exit(1)
 
     # Load data
-    loader = AERIDataLoader()
+    loader = AERIDataLoader(data_dir=input_dir)
 
     try:
-        errors = loader.load_from_directory(input_dir, sample_size=sample_size)
+        errors = loader.load_from_directory(total_limit=sample_size)
     except Exception as e:
         console.print(f"[red]Error loading data:[/red] {e}")
         raise typer.Exit(1)
