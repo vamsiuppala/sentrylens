@@ -6,6 +6,7 @@ from sentrylens.cli.embed import embed
 from sentrylens.cli.cluster import cluster
 from sentrylens.cli.agent import agent
 from sentrylens.cli.pipeline import pipeline
+from sentrylens.cli.serve import serve
 
 app = typer.Typer(
     name="sentrylens",
@@ -18,6 +19,7 @@ app.command()(embed)
 app.command()(cluster)
 app.command()(agent)
 app.command()(pipeline)
+app.command()(serve)
 
 
 if __name__ == "__main__":
