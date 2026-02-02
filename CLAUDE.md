@@ -10,19 +10,11 @@ Agentic AI system for error triage. Learning project for building production-gra
 - Clustering (HDBSCAN)
 - ReAct agent (Claude API with native tool_use)
 - CLI interface (Typer)
+- FastAPI Backend (REST API)
+- Sentry Webhook (`POST /webhooks/sentry` with auto-embed and cluster assignment)
 
-**Next Steps - Vertical Slice:**
-1. **FastAPI Backend** - REST API to expose agent functionality
-   - `POST /query` - Send queries to the triage agent
-   - `GET /errors/{id}` - Get error details
-   - `GET /clusters` - List clusters with stats
-   - `POST /errors/search` - Semantic search endpoint
-
-2. **Webhook Integration** - Receive errors from external sources
-   - `POST /webhooks/sentry` - Ingest Sentry error events
-   - Auto-embed and cluster incoming errors
-
-3. **Simple Web UI** (optional) - Basic interface for the agent
+**Next Steps:**
+1. **Simple Web UI** (optional) - Basic interface for the agent
    - Chat interface for agent queries
    - Error browser with cluster visualization
 
