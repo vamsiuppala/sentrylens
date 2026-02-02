@@ -1,7 +1,9 @@
 """FastAPI application for SentryLens."""
 import json
 from pathlib import Path
-from fastapi import FastAPI
+from typing import Optional
+
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 app = FastAPI(
@@ -44,6 +46,75 @@ def init_app(vector_store_path: Path, cluster_data_path: Path):
     agent = TriageAgent(
         vector_store_path=vector_store_path,
         cluster_data_path=cluster_data_path,
+    )
+
+
+# --- Sentry Webhook Models ---
+# These model Sentry's error event payload structure.
+# Sentry nests exception info: event.exception.values[0].stacktrace.frames
+
+class SentryEvent(BaseModel):
+    """Top-level Sentry error event."""
+    event_id: str  # Required - unique error identifier
+    message: Optional[str] = None  # Error message (sometimes empty)
+    culprit: Optional[str] = None  # Location where error occurred
+    platform: Optional[str] = None  # python, javascript, java, etc.
+    timestamp: Optional[str] = None
+    # exception contains the actual error details - we'll handle it as a dict
+    # to keep things simple (Sentry's schema is deeply nested)
+    exception: Optional[dict] = None
+
+
+def sentry_to_aeri(event: SentryEvent):
+    """
+    Convert Sentry event to AERIErrorRecord.
+
+    Sentry structure (simplified):
+    {
+        "event_id": "abc123",
+        "exception": {
+            "values": [{
+                "type": "ValueError",
+                "value": "invalid input",
+                "stacktrace": {
+                    "frames": [{"filename": "app.py", "function": "main", "lineno": 42}]
+                }
+            }]
+        }
+    }
+    """
+    from sentrylens.core.models import AERIErrorRecord
+
+    # Default values
+    error_type = "UnknownError"
+    error_message = event.message or "No message"
+    stack_lines = []
+
+    # Extract from exception if present
+    if event.exception and "values" in event.exception:
+        values = event.exception["values"]
+        if values:
+            first = values[0]
+            error_type = first.get("type", error_type)
+            error_message = first.get("value", error_message) or error_message
+
+            # Build stack trace from frames
+            stacktrace = first.get("stacktrace", {})
+            frames = stacktrace.get("frames", [])
+            for frame in frames:
+                fn = frame.get("function", "?")
+                filename = frame.get("filename", "?")
+                lineno = frame.get("lineno", "?")
+                stack_lines.append(f"  at {fn}({filename}:{lineno})")
+
+    # If no stack trace, create a minimal one
+    stack_trace = "\n".join(stack_lines) if stack_lines else f"{error_type}: {error_message}"
+
+    return AERIErrorRecord(
+        error_id=event.event_id,
+        error_type=error_type,
+        error_message=error_message,
+        stack_trace=stack_trace,
     )
 
 
@@ -94,7 +165,6 @@ def get_error(error_id: str):
     """Get a single error by ID."""
     error = errors_dict.get(error_id)
     if not error:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Error {error_id} not found")
 
     cluster = clusters_dict.get(error_id, {})
@@ -132,8 +202,6 @@ def list_clusters():
 @app.get("/clusters/{cluster_id}")
 def get_cluster(cluster_id: int, limit: int = 10):
     """Get errors in a specific cluster."""
-    from fastapi import HTTPException
-
     error_ids = [
         eid for eid, c in clusters_dict.items()
         if c["cluster_id"] == cluster_id
@@ -194,3 +262,57 @@ def query_agent(request: QueryRequest):
     """Send a query to the triage agent."""
     response = agent.run(request.query)
     return {"response": response}
+
+
+@app.post("/webhooks/sentry")
+def sentry_webhook(event: SentryEvent):
+    """
+    Receive error events from Sentry.
+
+    Flow:
+    1. Parse Sentry payload (FastAPI does this automatically via SentryEvent)
+    2. Convert to AERI format
+    3. Generate embedding (so it's searchable)
+    4. Find nearest neighbor → use its cluster
+    5. Store in memory (errors_dict, clusters_dict)
+
+    Note: Data is lost on restart - this is intentional for simplicity.
+    """
+    # Check for duplicates
+    if event.event_id in errors_dict:
+        raise HTTPException(status_code=409, detail=f"Error {event.event_id} already exists")
+
+    # Convert Sentry → AERI
+    aeri = sentry_to_aeri(event)
+
+    # Generate embedding and add to vector store
+    error_embedding = embedder.embed_single(aeri)
+    vector_store.add_embeddings([error_embedding])
+
+    # Find nearest neighbor and use its cluster
+    cluster_id = -1  # Default to noise
+    results = vector_store.search(error_embedding.embedding, top_k=1)
+    if results:
+        nearest_id, similarity = results[0]
+        # Only assign cluster if similarity is high enough (> 0.5)
+        if similarity > 0.5 and nearest_id in clusters_dict:
+            cluster_id = clusters_dict[nearest_id]["cluster_id"]
+
+    # Store in memory
+    errors_dict[aeri.error_id] = {
+        "error_id": aeri.error_id,
+        "error_type": aeri.error_type,
+        "error_message": aeri.error_message,
+        "stack_trace": aeri.stack_trace,
+    }
+
+    clusters_dict[aeri.error_id] = {
+        "error_id": aeri.error_id,
+        "cluster_id": cluster_id,
+    }
+
+    return {
+        "status": "received",
+        "error_id": aeri.error_id,
+        "cluster_id": cluster_id,
+    }
