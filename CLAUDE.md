@@ -12,11 +12,7 @@ Agentic AI system for error triage. Learning project for building production-gra
 - CLI interface (Typer)
 - FastAPI Backend (REST API)
 - Sentry Webhook (`POST /webhooks/sentry` with auto-embed and cluster assignment)
-
-**Next Steps:**
-1. **Simple Web UI** (optional) - Basic interface for the agent
-   - Chat interface for agent queries
-   - Error browser with cluster visualization
+- Web UI (chat interface + error browser with cluster visualization)
 
 ## Architecture
 
@@ -35,6 +31,7 @@ See `structure.txt` for full layout.
 ```
 src/sentrylens/
 ├── agent/          # ReAct agent + tools (Claude API)
+├── api/            # FastAPI backend + static web UI
 ├── cli/            # Typer CLI commands
 ├── clustering/     # HDBSCAN clustering
 ├── core/           # Pydantic models
@@ -63,9 +60,10 @@ sentrylens agent data/indexes/hnswlib_index_* data/processed/clusters_*.json
 |------|---------|
 | `src/sentrylens/agent/triage_agent.py` | ReAct loop with Claude |
 | `src/sentrylens/agent/tools.py` | search_similar, analyze_stack, suggest_fix |
+| `src/sentrylens/api/main.py` | FastAPI REST endpoints + webhook |
+| `src/sentrylens/api/static/index.html` | Web UI (chat + error browser) |
 | `src/sentrylens/embeddings/vector_store.py` | Hnswlib vector store operations |
 | `src/sentrylens/clustering/clusterer.py` | HDBSCAN clustering |
-| `scripts/demo_agent.py` | Interactive agent demo |
 
 ## Dependencies
 
