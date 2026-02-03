@@ -271,10 +271,18 @@
             border-left: 3px solid #e94560;
         }
 
-        .cluster-id {
-            width: 50px;
-            font-size: 0.875rem;
+        .cluster-label {
+            width: 140px;
+            font-size: 0.8rem;
+            color: #ccc;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .cluster-label .cluster-id {
             color: #888;
+            font-size: 0.7rem;
         }
 
         .cluster-bar-container {
@@ -701,8 +709,12 @@
 
             clusterList.innerHTML = clusters.map(c => `
                 <div class="cluster-bar ${selectedClusterId === c.cluster_id ? 'selected' : ''}"
-                     onclick="selectCluster(${c.cluster_id})">
-                    <span class="cluster-id">#${c.cluster_id}</span>
+                     onclick="selectCluster(${c.cluster_id})"
+                     title="${escapeHtml(c.label || 'Cluster ' + c.cluster_id)}">
+                    <span class="cluster-label">
+                        <span class="cluster-id">#${c.cluster_id}</span>
+                        ${escapeHtml(c.label || '')}
+                    </span>
                     <div class="cluster-bar-container">
                         <div class="cluster-bar-fill" style="width: ${(c.size / maxClusterSize) * 100}%"></div>
                     </div>
@@ -716,8 +728,12 @@
             selectedErrorId = null;
             closeErrorDetail();
 
+            // Find the cluster to get its label
+            const clusterInfo = clusters.find(c => c.cluster_id === clusterId);
+            const clusterLabel = clusterInfo?.label || `Cluster #${clusterId}`;
+
             document.getElementById('clear-filter').classList.remove('hidden');
-            document.getElementById('errors-title').textContent = `Cluster #${clusterId}`;
+            document.getElementById('errors-title').textContent = clusterLabel;
 
             renderClusters();
 
@@ -819,6 +835,13 @@
                 const response = await fetch(`/errors/${errorId}`);
                 const data = await response.json();
 
+                // Look up cluster label
+                let clusterDisplay = 'Noise (-1)';
+                if (data.cluster_id !== null && data.cluster_id !== -1) {
+                    const clusterInfo = clusters.find(c => c.cluster_id === data.cluster_id);
+                    clusterDisplay = clusterInfo?.label || `Cluster #${data.cluster_id}`;
+                }
+
                 detailContent.innerHTML = `
                     <div class="detail-field">
                         <label>Error ID</label>
@@ -830,7 +853,7 @@
                     </div>
                     <div class="detail-field">
                         <label>Cluster</label>
-                        <div class="value">${data.cluster_id !== null && data.cluster_id !== -1 ? '#' + data.cluster_id : 'Noise (-1)'}</div>
+                        <div class="value">${escapeHtml(clusterDisplay)}</div>
                     </div>
                     <div class="detail-field">
                         <label>Message</label>

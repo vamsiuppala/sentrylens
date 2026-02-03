@@ -45,6 +45,11 @@ def pipeline(
         "--use-gpu",
         help="Use GPU for embedding generation",
     ),
+    generate_labels: bool = typer.Option(
+        True,
+        "--labels/--no-labels",
+        help="Generate human-readable cluster labels using Claude API",
+    ),
 ):
     """Run full pipeline: ingest -> embed -> cluster.
 
@@ -106,6 +111,7 @@ def pipeline(
             epsilon=0.0,
             metric="euclidean",
             output=None,
+            generate_labels=generate_labels,
         )
     except SystemExit:
         console.print("[red]Pipeline failed at clustering step[/red]")

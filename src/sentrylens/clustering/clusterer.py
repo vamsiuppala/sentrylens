@@ -2,11 +2,16 @@
 HDBSCAN clustering implementation for error grouping.
 Provides density-based clustering with automatic optimal epsilon detection.
 """
+import os
 import numpy as np
 from pathlib import Path
-from typing import List, Dict, Any, Tuple, Optional
-from dataclasses import dataclass
+from typing import List, Dict, Any, Tuple, Optional, Callable
+from dataclasses import dataclass, field
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import hdbscan
+
+from anthropic import Anthropic
+from dotenv import load_dotenv
 
 from sentrylens.core.models import (
     AERIErrorRecord,
@@ -21,7 +26,7 @@ from sentrylens.config import settings
 @dataclass
 class ClusterStats:
     """Statistics about clustering results."""
-    
+
     num_clusters: int
     num_noise_points: int
     total_points: int
@@ -31,6 +36,7 @@ class ClusterStats:
     smallest_cluster_size: int
     noise_fraction: float
     silhouette_score: Optional[float] = None
+    cluster_labels: Dict[int, str] = field(default_factory=dict)
 
 
 class HDBSCANClusterer:
@@ -158,17 +164,21 @@ class HDBSCANClusterer:
     def cluster_embeddings(
         self,
         embeddings: List[ErrorEmbedding],
-        errors: Optional[List[AERIErrorRecord]] = None
-    ) -> List[ClusterAssignment]:
+        errors: Optional[List[AERIErrorRecord]] = None,
+        generate_labels: bool = False,
+        label_progress_callback: Optional[Callable[[int, str], None]] = None,
+    ) -> Tuple[List[ClusterAssignment], ClusterStats]:
         """
-        Cluster error embeddings and return assignments.
-        
+        Cluster error embeddings and return assignments with statistics.
+
         Args:
             embeddings: List of ErrorEmbedding objects
-            errors: List of corresponding AERIErrorRecord objects (for size info)
-            
+            errors: List of corresponding AERIErrorRecord objects (required if generate_labels=True)
+            generate_labels: Whether to generate human-readable cluster labels using Claude API
+            label_progress_callback: Optional callback(cluster_id, label) for label generation progress
+
         Returns:
-            List of ClusterAssignment objects
+            Tuple of (List of ClusterAssignment objects, ClusterStats with optional labels)
         """
         if not embeddings:
             raise ClusteringError("No embeddings provided")
@@ -210,15 +220,25 @@ class HDBSCANClusterer:
                 cluster_size=cluster_size
             )
             assignments.append(assignment)
-        
+
+        # Generate labels if requested
+        if generate_labels and errors:
+            logger.info("Generating cluster labels...")
+            stats.cluster_labels = self.generate_labels(
+                errors=errors,
+                assignments=assignments,
+                progress_callback=label_progress_callback,
+            )
+
         logger.info(
             "Created cluster assignments",
             num_assignments=len(assignments),
             num_clusters=stats.num_clusters,
-            num_noise=stats.num_noise_points
+            num_noise=stats.num_noise_points,
+            num_labels=len(stats.cluster_labels),
         )
-        
-        return assignments
+
+        return assignments, stats
     
     def get_stats(self) -> ClusterStats:
         """
@@ -307,19 +327,19 @@ class HDBSCANClusterer:
     def predict(self, embeddings: np.ndarray) -> np.ndarray:
         """
         Predict cluster labels for new embeddings using approximate prediction.
-        
+
         Args:
             embeddings: Array of shape (n_samples, n_features)
-            
+
         Returns:
             Predicted cluster labels
-            
+
         Raises:
             ClusteringError: If clusterer hasn't been fit or prediction fails
         """
         if self.clusterer is None:
             raise ClusteringError("Clusterer hasn't been fit yet")
-        
+
         try:
             labels, strengths = hdbscan.approximate_predict(
                 self.clusterer,
@@ -328,3 +348,155 @@ class HDBSCANClusterer:
             return labels
         except Exception as e:
             raise ClusteringError(f"Prediction failed: {e}")
+
+    def generate_labels(
+        self,
+        errors: List[AERIErrorRecord],
+        assignments: List[ClusterAssignment],
+        model: str = "claude-3-5-haiku-20241022",
+        max_sample: int = 5,
+        max_workers: int = 10,
+        progress_callback: Optional[Callable[[int, str], None]] = None,
+    ) -> Dict[int, str]:
+        """
+        Generate human-readable labels for all clusters using Claude API.
+
+        Uses parallel API calls for faster processing of many clusters.
+
+        Args:
+            errors: List of all error records
+            assignments: List of cluster assignments
+            model: Claude model to use for label generation
+            max_sample: Maximum errors to sample per cluster for labeling
+            max_workers: Maximum parallel API calls (default: 10)
+            progress_callback: Optional callback(cluster_id, label) for progress updates
+
+        Returns:
+            Dict mapping cluster_id to human-readable label
+        """
+        # Group errors by cluster
+        error_by_id = {e.error_id: e for e in errors}
+        clusters: Dict[int, List[AERIErrorRecord]] = {}
+
+        for assignment in assignments:
+            cid = assignment.cluster_id
+            if cid == -1:  # Skip noise
+                continue
+            if assignment.error_id in error_by_id:
+                if cid not in clusters:
+                    clusters[cid] = []
+                clusters[cid].append(error_by_id[assignment.error_id])
+
+        # Generate labels
+        labels: Dict[int, str] = {}
+
+        load_dotenv()
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+
+        if not api_key:
+            logger.warning("ANTHROPIC_API_KEY not set, using fallback labels")
+            for cid, cluster_errors in clusters.items():
+                label = self._fallback_label(cluster_errors)
+                labels[cid] = label
+                if progress_callback:
+                    progress_callback(cid, label)
+            return labels
+
+        client = Anthropic(api_key=api_key)
+
+        # Parallel label generation
+        logger.info(f"Generating labels for {len(clusters)} clusters with {max_workers} workers")
+
+        def generate_for_cluster(cid: int, cluster_errors: List[AERIErrorRecord]) -> Tuple[int, str]:
+            label = self._generate_single_label(cluster_errors, client, model, max_sample)
+            return cid, label
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(generate_for_cluster, cid, cluster_errors): cid
+                for cid, cluster_errors in clusters.items()
+            }
+
+            for future in as_completed(futures):
+                try:
+                    cid, label = future.result()
+                    labels[cid] = label
+                    if progress_callback:
+                        progress_callback(cid, label)
+                except Exception as e:
+                    cid = futures[future]
+                    logger.warning(f"Label generation failed for cluster {cid}", error=str(e))
+                    labels[cid] = self._fallback_label(clusters[cid])
+                    if progress_callback:
+                        progress_callback(cid, labels[cid])
+
+        logger.info("Generated cluster labels", num_labels=len(labels))
+        return labels
+
+    def _generate_single_label(
+        self,
+        errors: List[AERIErrorRecord],
+        client: Anthropic,
+        model: str,
+        max_sample: int,
+    ) -> str:
+        """Generate a label for a single cluster using Claude API."""
+        if not errors:
+            return "Empty cluster"
+
+        # Sample errors
+        sample = errors[:max_sample]
+
+        # Build context
+        error_descriptions = []
+        for i, error in enumerate(sample, 1):
+            desc = f"{i}. Type: {error.error_type}\n   Message: {error.error_message[:200]}"
+            error_descriptions.append(desc)
+
+        errors_text = "\n".join(error_descriptions)
+
+        prompt = f"""Analyze these related errors from a software error cluster and generate a short, descriptive label.
+
+Errors in cluster:
+{errors_text}
+
+Requirements for the label:
+- Maximum 6 words
+- Describe the common issue/pattern
+- Use technical but clear language
+- Examples: "Database connection timeout", "Null pointer in user service", "File permission denied errors"
+
+Respond with ONLY the label, nothing else."""
+
+        try:
+            response = client.messages.create(
+                model=model,
+                max_tokens=50,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            label = response.content[0].text.strip().strip('"\'')
+            logger.debug("Generated cluster label", label=label, num_errors=len(errors))
+            return label
+
+        except Exception as e:
+            logger.warning("Label generation failed, using fallback", error=str(e))
+            return self._fallback_label(errors)
+
+    def _fallback_label(self, errors: List[AERIErrorRecord]) -> str:
+        """Generate a simple fallback label from the most common error type."""
+        if not errors:
+            return "Empty cluster"
+
+        # Count error types
+        type_counts: Dict[str, int] = {}
+        for error in errors:
+            error_type = error.error_type or "Unknown"
+            # Simplify Java exception names (e.g., java.lang.NullPointerException -> NullPointerException)
+            if "." in error_type:
+                error_type = error_type.split(".")[-1]
+            type_counts[error_type] = type_counts.get(error_type, 0) + 1
+
+        # Return most common type
+        most_common = max(type_counts, key=type_counts.get)
+        return most_common

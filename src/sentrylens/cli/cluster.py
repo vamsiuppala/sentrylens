@@ -98,6 +98,11 @@ def cluster(
         "--output", "-o",
         help="Output JSON file (default: auto-generated)",
     ),
+    generate_labels: bool = typer.Option(
+        True,
+        "--labels/--no-labels",
+        help="Generate human-readable cluster labels using Claude API",
+    ),
 ) -> Path:
     """Run HDBSCAN clustering on error embeddings."""
     console.print("[bold blue]SentryLens[/bold blue] - Clustering")
@@ -137,9 +142,19 @@ def cluster(
         metric=metric,
     )
 
-    # Perform clustering
-    cluster_assignments = clusterer.cluster_embeddings(embeddings)
-    stats = clusterer.get_stats()
+    # Progress callback for label generation
+    def on_label(cluster_id: int, label: str):
+        console.print(f"  Cluster {cluster_id}: [cyan]{label}[/cyan]")
+
+    # Perform clustering (with optional label generation)
+    if generate_labels:
+        console.print("Clustering and generating labels...")
+    cluster_assignments, stats = clusterer.cluster_embeddings(
+        embeddings,
+        errors=errors,
+        generate_labels=generate_labels,
+        label_progress_callback=on_label if generate_labels else None,
+    )
 
     # Display results
     console.print()
@@ -153,6 +168,8 @@ def cluster(
     table.add_row("Average cluster size", f"{stats.avg_cluster_size:.1f}")
     table.add_row("Largest cluster", str(stats.largest_cluster_size))
     table.add_row("Smallest cluster", str(stats.smallest_cluster_size))
+    if stats.cluster_labels:
+        table.add_row("Labels generated", str(len(stats.cluster_labels)))
 
     console.print(table)
 
@@ -172,6 +189,7 @@ def cluster(
         'clusters': [c.model_dump(mode='json') for c in cluster_assignments],
         'errors': [e.model_dump(mode='json') for e in errors],
         'cluster_sizes': stats.cluster_sizes,
+        'cluster_labels': stats.cluster_labels,
         'source_embeddings_file': str(embeddings_file),
         'source_errors_file': str(errors_file),
         'created_at': datetime.now().isoformat(),

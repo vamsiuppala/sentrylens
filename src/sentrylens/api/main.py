@@ -16,6 +16,7 @@ app = FastAPI(
 # Data loaded by init_app()
 errors_dict = {}
 clusters_dict = {}
+cluster_labels = {}  # Maps cluster_id (int) to label (str)
 vector_store = None
 embedder = None
 agent = None
@@ -23,7 +24,7 @@ agent = None
 
 def init_app(vector_store_path: Path, cluster_data_path: Path):
     """Load data into the app."""
-    global errors_dict, clusters_dict, vector_store, embedder, agent
+    global errors_dict, clusters_dict, cluster_labels, vector_store, embedder, agent
 
     # Load cluster data
     with open(cluster_data_path) as f:
@@ -34,6 +35,12 @@ def init_app(vector_store_path: Path, cluster_data_path: Path):
 
     for cluster in data.get("clusters", []):
         clusters_dict[cluster["error_id"]] = cluster
+
+    # Load cluster labels (keys are strings in JSON, convert to int)
+    raw_labels = data.get("cluster_labels", {})
+    cluster_labels.clear()
+    for cid, label in raw_labels.items():
+        cluster_labels[int(cid)] = label
 
     # Load vector store and embedder
     from sentrylens.embeddings.vector_store import HnswlibVectorStore
@@ -177,7 +184,7 @@ def get_error(error_id: str):
 
 @app.get("/clusters")
 def list_clusters():
-    """List all clusters with their sizes."""
+    """List all clusters with their sizes and labels."""
     from collections import Counter
 
     # Count errors per cluster
@@ -187,7 +194,11 @@ def list_clusters():
     )
 
     clusters = [
-        {"cluster_id": cid, "size": count}
+        {
+            "cluster_id": cid,
+            "size": count,
+            "label": cluster_labels.get(cid, f"Cluster {cid}"),
+        }
         for cid, count in cluster_counts.most_common()
     ]
 
@@ -222,6 +233,7 @@ def get_cluster(cluster_id: int, limit: int = 10):
 
     return {
         "cluster_id": cluster_id,
+        "label": cluster_labels.get(cluster_id, f"Cluster {cluster_id}"),
         "size": len(error_ids),
         "errors": errors,
     }
@@ -312,10 +324,16 @@ def sentry_webhook(event: SentryEvent):
         "cluster_id": cluster_id,
     }
 
+    # Get cluster label if assigned to a cluster
+    label = None
+    if cluster_id != -1:
+        label = cluster_labels.get(cluster_id, f"Cluster {cluster_id}")
+
     return {
         "status": "received",
         "error_id": aeri.error_id,
         "cluster_id": cluster_id,
+        "cluster_label": label,
     }
 
 
