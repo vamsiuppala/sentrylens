@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 app = FastAPI(
@@ -316,3 +317,9 @@ def sentry_webhook(event: SentryEvent):
         "error_id": aeri.error_id,
         "cluster_id": cluster_id,
     }
+
+
+# Mount static files for web UI
+# Must be after all routes so API endpoints take precedence
+static_dir = Path(__file__).parent / "static"
+app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
