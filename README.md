@@ -9,6 +9,9 @@ An agentic AI system for automated error triage. Uses semantic embeddings, clust
 - **AI-Powered Triage**: Interactive ReAct agent powered by Claude for intelligent error analysis
 - **Stack Trace Analysis**: Parse and analyze stack traces to identify root causes
 - **Fix Suggestions**: Generate actionable fix recommendations based on error patterns
+- **Web UI**: Chat interface for agent queries + error browser with cluster visualization
+- **REST API**: FastAPI backend with endpoints for errors, clusters, and search
+- **Sentry Integration**: Webhook endpoint to receive errors from Sentry with auto-clustering
 
 ## Architecture
 
@@ -19,15 +22,18 @@ An agentic AI system for automated error triage. Uses semantic embeddings, clust
 └─────────────┘    └──────────────┘    └─────────────┘    └─────────────┘
                                               │                   │
                                               ▼                   ▼
-                                       ┌─────────────────────────────────┐
-                                       │       ReAct Agent (Claude)      │
-                                       │  ┌─────────────────────────┐    │
-                                       │  │ Tools:                  │    │
-                                       │  │ • search_similar_errors │    │
-                                       │  │ • analyze_stack_trace   │    │
-                                       │  │ • suggest_fix           │    │
-                                       │  └─────────────────────────┘    │
-                                       └─────────────────────────────────┘
+┌─────────────┐                        ┌─────────────────────────────────┐
+│   Sentry    │───webhook─────────────▶│         FastAPI Backend         │
+│  (errors)   │                        ├─────────────────────────────────┤
+└─────────────┘                        │       ReAct Agent (Claude)      │
+                                       │  • search_similar_errors        │
+      ┌────────────────────────────────│  • analyze_stack_trace          │
+      │                                │  • suggest_fix                  │
+      ▼                                └─────────────────────────────────┘
+┌─────────────┐                                       │
+│   Web UI    │◀──────────────────────────────────────┘
+│ Chat/Browse │
+└─────────────┘
 ```
 
 ## Installation
@@ -142,6 +148,55 @@ Run the complete pipeline:
 sentrylens pipeline -i <input_dir> [-n <sample_size>] [--min-cluster-size <n>]
 ```
 
+### `sentrylens serve`
+
+Start the web server:
+
+```bash
+sentrylens serve <vector_store> <cluster_data> [--host <host>] [--port <port>]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--host` | Host to bind (default: 0.0.0.0) |
+| `--port` | Port to bind (default: 8000) |
+
+## Web UI
+
+After starting the server, open http://localhost:8000 in your browser.
+
+### Chat Tab
+- Query the AI agent in natural language
+- Ask about error patterns, similar errors, or get fix suggestions
+- Example: "What are the most common NullPointerException errors?"
+
+### Browse Tab
+- View cluster visualization as horizontal bar chart
+- Click a cluster to filter errors by that cluster
+- Click an error to see full details including stack trace
+- Paginated error list with "Load more" support
+
+## REST API
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check with loaded data stats |
+| `/errors` | GET | List errors (supports `limit`, `offset`) |
+| `/errors/{id}` | GET | Get error details by ID |
+| `/clusters` | GET | List all clusters with sizes |
+| `/clusters/{id}` | GET | Get errors in a specific cluster |
+| `/errors/search` | POST | Semantic search for similar errors |
+| `/query` | POST | Send a query to the triage agent |
+| `/webhooks/sentry` | POST | Receive errors from Sentry |
+
+### Sentry Webhook
+
+Configure Sentry to send error events to `POST /webhooks/sentry`. The endpoint will:
+1. Parse the Sentry event payload
+2. Generate an embedding for the error
+3. Find the nearest cluster and assign the error
+4. Store the error for browsing and searching
+
 ## Project Structure
 
 ```
@@ -149,6 +204,9 @@ src/sentrylens/
 ├── agent/              # ReAct agent and tools
 │   ├── tools.py        # search_similar, analyze_stack, suggest_fix
 │   └── triage_agent.py # ReAct loop with Claude API
+├── api/                # FastAPI backend
+│   ├── main.py         # REST endpoints and webhook
+│   └── static/         # Web UI (HTML/CSS/JS)
 ├── cli/                # Typer CLI commands
 ├── clustering/         # HDBSCAN clustering
 ├── core/               # Pydantic models and exceptions
@@ -215,6 +273,8 @@ pytest --cov=sentrylens
 - **hdbscan** - Density-based clustering
 - **pydantic** - Data validation
 - **typer** - CLI framework
+- **fastapi** - REST API framework
+- **uvicorn** - ASGI server
 
 ## Acknowledgments
 
