@@ -72,3 +72,45 @@ sentrylens agent data/indexes/hnswlib_index_* data/processed/clusters_*.json
 - `hnswlib` - Vector search
 - `hdbscan` - Clustering
 - `pydantic` - Data models
+
+## Planned: Live Triage Tools
+
+**Status: Not started**
+
+New tools for `src/sentrylens/agent/tools.py` to help diagnose incoming errors against the existing cluster knowledge base.
+
+### Essential Tools
+
+1. **`get_cluster_context(cluster_id: int)`**
+   - When error is assigned to a cluster, retrieve cluster label, size, common patterns
+   - Return frequent error types in cluster, typical stack trace patterns, and recommendations
+   - Use `clusters_dict` to find all errors in cluster, analyze `error_type` distribution
+
+2. **`find_best_known_fix(error_id: str)`**
+   - Search cluster history for similar resolved errors
+   - Return known fixes with confidence score based on cluster membership
+   - Leverage similarity search + cluster context
+
+3. **`assess_error_prevalence(error_id: str)`**
+   - Check if error is part of large cluster (systemic issue) or isolated/noise (one-off)
+   - Return prevalence score, cluster size, noise flag
+   - Flag potential regression indicators (sudden cluster growth)
+
+4. **`get_root_component(cluster_id: int)`**
+   - Analyze cluster's stack traces to find common methods/classes
+   - Filter out library code (java.*, javax.*, org.eclipse.*, etc.)
+   - Return top components with frequency counts
+
+### Nice-to-Have
+
+5. **`compare_against_cluster(error_id: str, cluster_id: int)`**
+   - Compare new error to cluster's typical profile
+   - Flag if error is an outlier within its cluster
+   - Return similarity score to cluster centroid
+
+### Implementation Notes
+
+- Each tool returns JSON string (consistent with existing tools)
+- Add tool schemas to `get_tool_schemas()` method
+- Use existing infrastructure: `errors_dict`, `clusters_dict`, `vector_store`, `embedder`
+- Include logging and error handling following existing patterns
